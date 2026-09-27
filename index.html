@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mini Warzone</title>
+  <style>
+    html, body {
+      margin: 0;
+      overflow: hidden;
+      background: #000;
+      height: 100%;
+    }
+    canvas { display: block; }
+
+    #menu {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      color: white;
+      font-family: system-ui, sans-serif;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 10;
+      text-align: center;
+    }
+    #menu h1 { margin: 0; font-size: 2.2rem; letter-spacing: 1px; }
+    #menu p { margin: 0; opacity: 0.8; font-size: 0.95rem; }
+    #play-button {
+      padding: 14px 28px;
+      font-size: 18px;
+      cursor: pointer;
+      background: #e63946;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+    }
+    #play-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    #loading {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      color: white;
+      font-family: system-ui, sans-serif;
+      font-size: 0.85rem;
+      z-index: 11;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 6px 10px;
+      border-radius: 4px;
+    }
+    #crosshair {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      width: 6px;
+      height: 6px;
+      margin: -3px 0 0 -3px;
+      border-radius: 50%;
+      background: white;
+      mix-blend-mode: difference;
+      pointer-events: none;
+      z-index: 5;
+      transition: transform 0.08s ease, background 0.08s ease;
+    }
+    #crosshair.hit {
+      transform: scale(2.4);
+      background: #ffb400;
+    }
+
+    /* --- HUD : vie, dégâts, écran de mort ------------------------------- */
+    #hud {
+      position: fixed;
+      left: 16px;
+      bottom: 16px;
+      z-index: 6;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: system-ui, sans-serif;
+      color: white;
+      pointer-events: none;
+    }
+    #team-label {
+      font-weight: 700;
+      font-size: 0.8rem;
+      padding: 4px 10px;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+    }
+    #team-label.team-red { background: rgba(230, 57, 70, 0.85); }
+    #team-label.team-blue { background: rgba(58, 134, 255, 0.85); }
+    #health-bar {
+      width: 180px;
+      height: 16px;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      overflow: hidden;
+    }
+    #health-fill {
+      height: 100%;
+      width: 100%;
+      background: linear-gradient(90deg, #e63946, #ff8fa3);
+      transition: width 0.15s ease;
+    }
+    #health-text {
+      font-weight: 600;
+      font-size: 0.95rem;
+      min-width: 2.5em;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+    }
+    #shield-bar {
+      width: 90px;
+      height: 16px;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      overflow: hidden;
+    }
+    #shield-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #1c4fbf, #6fb3ff);
+      transition: width 0.15s ease;
+    }
+    #money-hud {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 6;
+      font-family: system-ui, sans-serif;
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: #ffd23f;
+      padding: 6px 16px;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.45);
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+      pointer-events: none;
+    }
+    #inventory-hud {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      z-index: 6;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-family: system-ui, sans-serif;
+    }
+    .inv-slot {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: white;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+      min-width: 130px;
+      transition: background 0.15s ease, border-color 0.15s ease;
+      pointer-events: none;
+    }
+    .inv-slot.active {
+      background: rgba(255, 210, 63, 0.25);
+      border-color: #ffd23f;
+    }
+    .inv-slot.empty .inv-label { opacity: 0.5; }
+    .inv-key {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.15);
+      font-size: 0.8rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .inv-label {
+      font-weight: 600;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    #damage-flash {
+      position: fixed;
+      inset: 0;
+      z-index: 4;
+      background: radial-gradient(circle, transparent 40%, rgba(230, 30, 40, 0.45) 100%);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+    #damage-flash.show {
+      opacity: 1;
+      transition: opacity 0s;
+    }
+    #death-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: rgba(20, 0, 0, 0.55);
+      color: white;
+      font-family: system-ui, sans-serif;
+      text-align: center;
+    }
+    #death-screen[hidden] { display: none; }
+    #death-screen h2 {
+      margin: 0;
+      font-size: 2rem;
+      letter-spacing: 2px;
+      color: #ff6b6b;
+    }
+    #death-screen p { margin: 0; opacity: 0.85; }
+
+    /* --- Écrans connexion / lobby -------------------------------------- */
+    .screen {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(160deg, #1b1b1f, #101014);
+      color: white;
+      font-family: system-ui, sans-serif;
+      overflow-y: auto;
+      padding: 24px 16px;
+      box-sizing: border-box;
+    }
+    .screen[hidden] {
+      display: none; 
+    }
+    .panel {
+      width: 100%;
+      max-width: 420px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 28px;
+      box-sizing: border-box;
+    }
+    .panel h1 {
+      margin: 0 0 20px;
+      font-size: 1.8rem;
+      letter-spacing: 1px;
+      text-align: center;
+    }
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+    .tab {
+      flex: 1;
+      padding: 10px;
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 6px;
+      color: white;
+      opacity: 0.6;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .tab.active {
+      opacity: 1;
+      border-color: #e63946;
+      background: rgba(230, 57, 70, 0.15);
+    }
+    .auth-form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .auth-form[hidden] {
+      display: none;
+    }
+    input, select {
+      padding: 10px 12px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: rgba(0, 0, 0, 0.3);
+      color: white;
+      font-size: 0.95rem;
+    }
+    input::placeholder { color: rgba(255, 255, 255, 0.4); }
+    button {
+      padding: 10px 16px;
+      border-radius: 6px;
+      border: none;
+      background: #e63946;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    button.secondary {
+      background: rgba(255, 255, 255, 0.12);
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .link-button {
+      background: none;
+      color: rgba(255, 255, 255, 0.7);
+      text-decoration: underline;
+      font-weight: 400;
+      padding: 4px 8px;
+    }
+    .error {
+      color: #ffb4b4;
+      font-size: 0.85rem;
+      min-height: 1.2em;
+      margin: 12px 0 0;
+    }
+
+    .lobby-panel { max-width: 720px; }
+    .lobby-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+    .lobby-header h1 { margin: 0; font-size: 1.4rem; }
+    .lobby-columns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 560px) {
+      .lobby-columns { grid-template-columns: 1fr; }
+    }
+    .appearance-section { margin-bottom: 20px; }
+    .appearance-row { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+    .appearance-preview-body {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      transition: background 0.15s ease;
+    }
+    .appearance-preview-face { font-size: 30px; line-height: 1; }
+    .appearance-controls { display: flex; flex-direction: column; gap: 10px; flex: 1; min-width: 200px; }
+    .appearance-color-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.85rem;
+      opacity: 0.8;
+    }
+    #appearance-body-color {
+      width: 48px;
+      height: 32px;
+      padding: 2px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: transparent;
+      cursor: pointer;
+    }
+    .face-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+    .face-option {
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      font-size: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      border: 2px solid transparent;
+    }
+    .face-option.selected { border-color: #e63946; background: rgba(230, 57, 70, 0.2); }
+
+    .lobby-section h2 { font-size: 1.05rem; margin: 0 0 10px; }
+    .lobby-section h3 {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      opacity: 0.6;
+      margin: 16px 0 8px;
+    }
+    .inline-form { display: flex; gap: 8px; margin-bottom: 8px; }
+    .inline-form input { flex: 1; }
+    .list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 140px;
+      overflow-y: auto;
+    }
+    .list li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
+    .list li.muted {
+      justify-content: flex-start;
+      opacity: 0.5;
+      font-size: 0.85rem;
+    }
+    .group-item {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+    }
+    .group-title { font-weight: 600; }
+    .group-actions { display: flex; gap: 8px; align-items: center; }
+    .cta {
+      width: 100%;
+      padding: 14px;
+      font-size: 1.05rem;
+      margin-top: 4px;
+    }
+
+    /* --- Boutique (économie) -------------------------------------------- */
+    .shop-panel {
+      max-width: 640px;
+      max-height: 86vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .shop-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .shop-header h1 { margin: 0; font-size: 1.4rem; }
+    .shop-money {
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: #ffd23f;
+    }
+    .shop-items {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow-y: auto;
+      padding-right: 4px;
+      margin-bottom: 16px;
+      flex: 1;
+      min-height: 120px;
+    }
+    .shop-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-left: 4px solid var(--rarity-color, rgba(255, 255, 255, 0.2));
+    }
+    .shop-item-info { flex: 1; min-width: 0; }
+    .shop-item-name { font-weight: 600; font-size: 0.95rem; }
+    .shop-item-desc { font-size: 0.78rem; opacity: 0.65; margin-top: 2px; }
+    .shop-item-stats { font-size: 0.78rem; opacity: 0.8; margin-top: 4px; }
+    .shop-item-buy {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .shop-item-price { font-weight: 700; font-size: 0.9rem; color: #ffd23f; }
+    .shop-item-buy button { min-width: 100px; }
+
+    /* Pastille de rareté (gris/bleu/rouge) dans les slots d'inventaire */
+    .inv-rarity-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: transparent;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="loading">Chargement de la map…</div>
+  <div id="crosshair"></div>
+  <div id="damage-flash"></div>
+
+  <div id="hud">
+    <span id="team-label"></span>
+    <div id="health-bar"><div id="health-fill"></div></div>
+    <span id="health-text">100</span>
+    <div id="shield-bar"><div id="shield-fill"></div></div>
+  </div>
+  <div id="inventory-hud">
+    <div id="slot-weapon1" class="inv-slot active">
+      <span class="inv-key">1</span><span class="inv-rarity-dot"></span><span class="inv-label">Pistolet</span>
+    </div>
+    <div id="slot-weapon2" class="inv-slot empty">
+      <span class="inv-key">2</span><span class="inv-rarity-dot"></span><span class="inv-label">Vide</span>
+    </div>
+    <div id="slot-vest" class="inv-slot empty">
+      <span class="inv-key">3</span><span class="inv-label">Gilets x0/2</span>
+    </div>
+  </div>
+  <div id="money-hud"><span id="money-text">0 €</span></div>
+
+  <div id="death-screen" hidden>
+    <h2>Éliminé</h2>
+    <p id="respawn-countdown">Réapparition dans 3s…</p>
+  </div>
+
+  <!-- Boutique : pas encore de magasin physique dans la salle 3D, s'ouvre
+       pour l'instant avec la touche B (voir main.js, section "Boutique"). -->
+  <div id="shop-screen" class="screen" hidden>
+    <div class="panel shop-panel">
+      <div class="shop-header">
+        <h1>Boutique</h1>
+        <div class="shop-money"><span id="shop-money-text">0 €</span></div>
+      </div>
+      <div class="tabs">
+        <button type="button" class="tab active" data-shop-tab="weapon">Armes</button>
+        <button type="button" class="tab" data-shop-tab="vest">Gilets</button>
+        <button type="button" class="tab" data-shop-tab="ability">Capacités</button>
+      </div>
+      <div id="shop-items" class="shop-items"></div>
+      <button id="shop-close-button" type="button" class="cta secondary">Fermer (B)</button>
+    </div>
+  </div>
+
+  <!-- Écran de connexion / inscription -->
+  <div id="auth-screen" class="screen">
+    <div class="panel">
+      <h1>Mini Warzone</h1>
+      <div class="tabs">
+        <button id="tab-login" type="button" class="tab active">Connexion</button>
+        <button id="tab-signup" type="button" class="tab">Créer un compte</button>
+      </div>
+
+      <form id="login-form" class="auth-form">
+        <input id="login-email" type="email" placeholder="Email" autocomplete="username" required />
+        <input id="login-password" type="password" placeholder="Mot de passe" autocomplete="current-password" required />
+        <button type="submit">Se connecter</button>
+      </form>
+
+      <form id="signup-form" class="auth-form" hidden>
+        <input id="signup-pseudo" type="text" placeholder="Pseudo (3 à 20 caractères)" required />
+        <input id="signup-email" type="email" placeholder="Email" autocomplete="username" required />
+        <input id="signup-password" type="password" placeholder="Mot de passe (6 caractères min.)" autocomplete="new-password" required />
+        <button type="submit">Créer mon compte</button>
+      </form>
+
+      <p id="auth-error" class="error"></p>
+    </div>
+  </div>
+
+  <!-- Lobby : compte, amis, groupes -->
+  <div id="lobby-screen" class="screen" hidden>
+    <div class="panel lobby-panel">
+      <div class="lobby-header">
+        <h1>Mini Warzone</h1>
+        <div>
+          <span id="lobby-pseudo"></span>
+          <button id="logout-button" type="button" class="link-button">Déconnexion</button>
+        </div>
+      </div>
+
+      <section class="lobby-section appearance-section">
+        <h2>Apparence</h2>
+        <div class="appearance-row">
+          <div id="appearance-preview-body" class="appearance-preview-body">
+            <span id="appearance-preview-face" class="appearance-preview-face"></span>
+          </div>
+          <div class="appearance-controls">
+            <label class="appearance-color-label">
+              Couleur du corps
+              <input type="color" id="appearance-body-color" />
+            </label>
+            <div id="appearance-face-grid" class="face-grid"></div>
+          </div>
+        </div>
+      </section>
+
+      <div class="lobby-columns">
+        <section class="lobby-section">
+          <h2>Amis</h2>
+          <form id="friend-search-form" class="inline-form">
+            <input id="friend-search-input" type="text" placeholder="Chercher un pseudo…" />
+            <button type="submit">Chercher</button>
+          </form>
+          <ul id="friend-search-results" class="list"></ul>
+
+          <h3>Demandes reçues</h3>
+          <ul id="friend-requests-list" class="list"></ul>
+
+          <h3>Mes amis</h3>
+          <ul id="friends-list" class="list"></ul>
+        </section>
+
+        <section class="lobby-section">
+          <h2>Groupes</h2>
+          <form id="group-create-form" class="inline-form">
+            <input id="group-name-input" type="text" placeholder="Nom du groupe" />
+            <button type="submit">Créer</button>
+          </form>
+
+          <h3>Invitations reçues</h3>
+          <ul id="group-invites-list" class="list"></ul>
+
+          <ul id="groups-list" class="list"></ul>
+        </section>
+      </div>
+
+      <button id="enter-game-button" type="button" class="cta">Rejoindre l'arène</button>
+      <p id="lobby-error" class="error"></p>
+    </div>
+  </div>
+
+  <div id="menu">
+    <h1>Mini Warzone</h1>
+    <p>ZQSD/WASD pour bouger, souris pour regarder, clic pour tirer, 1/2/3 pour changer d'arme, T pour ramasser, B pour la boutique, Échap pour sortir</p>
+    <button id="play-button" disabled>Chargement…</button>
+    <button id="quit-button" class="secondary" type="button">Quitter la partie</button>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+  <script type="module" src="/src/lobby.js"></script>
+</body>
+</html>
