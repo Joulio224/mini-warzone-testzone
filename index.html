@@ -55,6 +55,24 @@
       padding: 6px 10px;
       border-radius: 4px;
     }
+    #shop-prompt {
+      position: fixed;
+      top: calc(50% + 40px);
+      left: 50%;
+      transform: translateX(-50%);
+      display: none;
+      color: white;
+      font-family: system-ui, sans-serif;
+      font-size: 0.9rem;
+      font-weight: 600;
+      background: rgba(0, 0, 0, 0.55);
+      border: 1px solid rgba(255, 210, 63, 0.5);
+      padding: 6px 14px;
+      border-radius: 6px;
+      z-index: 6;
+      pointer-events: none;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+    }
     #crosshair {
       position: fixed;
       top: 50%;
@@ -194,6 +212,26 @@
       font-size: 0.85rem;
       text-transform: uppercase;
       letter-spacing: 0.5px;
+    }
+    /* Stock de gilets en réserve (touche P) : un petit carré par
+       emplacement, grisé par défaut, rempli pour chaque gilet en réserve —
+       volontairement sans chiffre, voir updateVestStockUI() dans main.js. */
+    #vest-stock {
+      display: flex;
+      gap: 6px;
+      padding: 0 2px;
+    }
+    .vest-pip {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .vest-pip.filled {
+      background: linear-gradient(135deg, #1c4fbf, #6fb3ff);
+      border-color: rgba(255, 255, 255, 0.4);
     }
     #damage-flash {
       position: fixed;
@@ -507,6 +545,7 @@
 </head>
 <body>
   <div id="loading">Chargement de la map…</div>
+  <div id="shop-prompt">B — Ouvrir la boutique</div>
   <div id="crosshair"></div>
   <div id="damage-flash"></div>
 
@@ -523,9 +562,9 @@
     <div id="slot-weapon2" class="inv-slot empty">
       <span class="inv-key">2</span><span class="inv-rarity-dot"></span><span class="inv-label">Vide</span>
     </div>
-    <div id="slot-vest" class="inv-slot empty">
-      <span class="inv-key">3</span><span class="inv-label">Gilets x0/2</span>
-    </div>
+    <!-- Stock de gilets en réserve (touche P pour en utiliser un), rempli
+         dynamiquement par updateVestStockUI() dans main.js. -->
+    <div id="vest-stock"></div>
   </div>
   <div id="money-hud"><span id="money-text">0 €</span></div>
 
@@ -534,8 +573,9 @@
     <p id="respawn-countdown">Réapparition dans 3s…</p>
   </div>
 
-  <!-- Boutique : pas encore de magasin physique dans la salle 3D, s'ouvre
-       pour l'instant avec la touche B (voir main.js, section "Boutique"). -->
+  <!-- Boutique : s'ouvre en s'approchant de la table posée au centre de la
+       salle (voir buildShopTable/SHOP_POSITION dans main.js) et en appuyant
+       sur B. -->
   <div id="shop-screen" class="screen" hidden>
     <div class="panel shop-panel">
       <div class="shop-header">
